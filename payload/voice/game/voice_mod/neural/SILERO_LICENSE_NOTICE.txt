@@ -1,0 +1,18 @@
+THIRD-PARTY MODEL NOTICE
+
+This mod does not redistribute the Silero model file.
+
+setup-neural.ps1 downloads:
+  https://models.silero.ai/models/tts/ru/v5_5_ru.pt
+
+Upstream project:
+  https://github.com/snakers4/silero-models
+
+As documented by the upstream project, Silero models other than the CIS base
+models are published under the repository's CC-NC-BY / non-commercial terms.
+
+The neural model is therefore intended here for personal/non-commercial use.
+Review the upstream license before redistributing a package containing the model
+or using it commercially.
+
+PyTorch is installed from the official PyTorch wheel index.

@@ -1,0 +1,46 @@
+{
+  "version": "v0.5.2",
+  "engine": "Silero v5_5_ru",
+  "mode": "Acting Lite",
+  "voice_cloning": false,
+  "reference_audio": false,
+  "lexical_emotion_classifier": false,
+  "deterministic": true,
+  "acting": {
+    "clause_level_prosody": true,
+    "punctuation_aware": true,
+    "stable_micro_pause_variation_ms": 14,
+    "random_voice_drift": false
+  },
+  "profiles": {
+    "sayori": {
+      "speaker": "baya",
+      "base": "medium/fast",
+      "local": "high/fast on questions and exclamations",
+      "target": "cute, small, slightly squeaky"
+    },
+    "natsuki": {
+      "speaker": "kseniya",
+      "base": "medium/fast",
+      "target": "cute, energetic, less squeaky than Sayori"
+    },
+    "monika": {
+      "speaker": "baya",
+      "base": "medium/medium",
+      "target": "restrained, confident, not slow"
+    },
+    "yuri": {
+      "speaker": "xenia",
+      "base": "medium/slow",
+      "local": "gentle high pitch only on questions",
+      "ellipsis_pause_ms_approx": 345,
+      "target": "very cute, slightly slow"
+    },
+    "mc": {
+      "speaker": "aidar",
+      "base": "medium/medium",
+      "local": "fast on exclamations",
+      "target": "approximately 16-year-old boy"
+    }
+  }
+}
