@@ -1,0 +1,37 @@
+# DDLC game assets / translated binary payload
+DDLC.exe
+audio.rpa
+images.rpa
+scripts.rpa
+fonts.rpa
+*.rpa
+
+# Silero / ML runtime
+*.pt
+*.pth
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Generated audio / logs / cache
+*.wav
+*.log
+cache/
+voice_mod/neural/cache/
+
+# Local installer backups
+_DDLC_RussianVoice_Backups/
+voice_mod_safe_backups/
+
+# OS / editor junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# Local archives
+*.zip
+*.rar
+*.7z
