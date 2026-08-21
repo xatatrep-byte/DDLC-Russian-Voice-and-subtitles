@@ -22,7 +22,7 @@ if (!$GamePath) {
     }
 }
 
-Write-Host "DDLC Russian Voice v1.0.1 diagnostic"
+Write-Host "DDLC Russian Voice v1.0.5 diagnostic"
 Write-Host ("GamePath=" + $GamePath)
 
 if (!(Test-DDLCPath $GamePath)) {
@@ -39,6 +39,38 @@ Write-Host "===== active hooks ====="
 $hooks = @(Get-ChildItem -LiteralPath $game -Recurse -File -Filter "zz_ddlc_russian_voice.rpy" -ErrorAction SilentlyContinue)
 Write-Host ("count=" + $hooks.Count)
 $hooks | ForEach-Object { Write-Host $_.FullName }
+
+Write-Host ""
+Write-Host "===== SUN-TEAM / Ren'Py runtime ====="
+$scriptVersion = Join-Path $game "script_version.txt"
+if (Test-Path -LiteralPath $scriptVersion) {
+    Write-Host ("script_version=" + ((Get-Content -LiteralPath $scriptVersion -Raw).Trim()))
+} else {
+    Write-Host "script_version=MISSING"
+}
+foreach ($rel in @(
+    "renpy\bootstrap.py",
+    "lib\windows-i686\python27.dll"
+)) {
+    $p = Join-Path $GamePath $rel
+    if (Test-Path -LiteralPath $p) {
+        Write-Host ($rel + " " + (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant())
+    } else {
+        Write-Host ($rel + " MISSING")
+    }
+}
+
+Write-Host ""
+Write-Host "===== Silero backend flags ====="
+foreach ($name in @("runtime-ready.flag","ready.flag","failed.flag")) {
+    $p = Join-Path $neural $name
+    Write-Host ($name + "=" + (Test-Path -LiteralPath $p))
+}
+$hook = Join-Path $game "zz_ddlc_russian_voice.rpy"
+if (Test-Path -LiteralPath $hook) {
+    Select-String -LiteralPath $hook -Pattern "runtime-ready.flag|windows-sapi|silero-v5_5" |
+        ForEach-Object { Write-Host $_.Line }
+}
 
 Write-Host ""
 Write-Host "===== subtitle hashes ====="

@@ -1,0 +1,12 @@
+DDLC Russian Voice + Russian Subtitles v1.0.5
+
+1. Установите оригинальную DDLC 2017 через Steam.
+2. Распакуйте ВЕСЬ архив релиза.
+3. Закройте игру.
+4. Запустите install.bat.
+5. Дождитесь INSTALLATION COMPLETE.
+6. Запустите игру через Steam.
+
+v1.0.5 использует полный DDLC_1.0_PC.rar.
+Он удаляет старые папки game/renpy/lib/characters и распаковывает полный
+SUN-TEAM архив с заменой, после чего устанавливает русскую Silero-озвучку.

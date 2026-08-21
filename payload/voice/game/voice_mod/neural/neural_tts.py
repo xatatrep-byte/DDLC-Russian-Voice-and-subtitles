@@ -23,7 +23,7 @@ try:
 except ImportError:
     winsound = None
 
-ENGINE_VERSION = "ddlc-neural-v0.5.2.3-natural-dashes-all-silero-v5_5_ru"
+ENGINE_VERSION = "ddlc-neural-v1.0.4c-latin-nickname-fix-silero-v5_5_ru"
 SAMPLE_RATE = 48000
 
 ROOT = Path(__file__).resolve().parent
@@ -99,6 +99,187 @@ def stop_audio() -> None:
         winsound.PlaySound(None, 0)
     except Exception:
         pass
+
+
+
+# Common English names/nicknames. This is only for TTS pronunciation;
+# the text displayed by Ren'Py is never changed.
+_LATIN_NAME_OVERRIDES = {
+    "alex": "Алекс",
+    "alexander": "Александр",
+    "max": "Макс",
+    "john": "Джон",
+    "jack": "Джек",
+    "james": "Джеймс",
+    "mike": "Майк",
+    "michael": "Майкл",
+    "nick": "Ник",
+    "sam": "Сэм",
+    "tom": "Том",
+    "mark": "Марк",
+    "chris": "Крис",
+    "david": "Дэвид",
+    "daniel": "Дэниел",
+    "kevin": "Кевин",
+    "steve": "Стив",
+    "steven": "Стивен",
+    "peter": "Питер",
+    "paul": "Пол",
+    "george": "Джордж",
+    "jason": "Джейсон",
+    "robert": "Роберт",
+    "william": "Уильям",
+    "will": "Уилл",
+    "bill": "Билл",
+    "andrew": "Эндрю",
+    "andy": "Энди",
+    "ryan": "Райан",
+    "brian": "Брайан",
+    "eric": "Эрик",
+    "adam": "Адам",
+    "ben": "Бен",
+    "leo": "Лео",
+    "luke": "Люк",
+    "logan": "Логан",
+    "ethan": "Итан",
+    "noah": "Ноа",
+    "liam": "Лиам",
+}
+
+_LATIN_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_'-]*")
+
+
+def _latin_token_to_cyrillic(token: str) -> str:
+    """
+    Best-effort pronunciation of a Latin nickname for Russian TTS.
+
+    It intentionally favors speech robustness over perfect linguistic
+    transliteration. Displayed game text is untouched.
+    """
+    raw = token
+    low = raw.lower()
+
+    if low in _LATIN_NAME_OVERRIDES:
+        return _LATIN_NAME_OVERRIDES[low]
+
+    # Preserve digits separately; transliterate alphabetic runs.
+    parts = re.findall(r"[A-Za-z]+|[0-9]+|[_'-]+", raw)
+    out: list[str] = []
+
+    # Longest patterns first.
+    multi = (
+        ("shch", "щ"),
+        ("sch", "щ"),
+        ("tch", "ч"),
+        ("dge", "дж"),
+        ("zh", "ж"),
+        ("kh", "х"),
+        ("ph", "ф"),
+        ("th", "т"),
+        ("ch", "ч"),
+        ("sh", "ш"),
+        ("ck", "к"),
+        ("qu", "кв"),
+        ("yo", "ё"),
+        ("yu", "ю"),
+        ("ya", "я"),
+        ("ye", "е"),
+        ("ee", "и"),
+        ("oo", "у"),
+        ("ai", "ай"),
+        ("ay", "эй"),
+        ("ey", "эй"),
+        ("oi", "ой"),
+        ("oy", "ой"),
+        ("ou", "ау"),
+        ("ow", "ау"),
+    )
+
+    single = {
+        "a": "а",
+        "b": "б",
+        "c": "к",
+        "d": "д",
+        "e": "е",
+        "f": "ф",
+        "g": "г",
+        "h": "х",
+        "i": "и",
+        "j": "дж",
+        "k": "к",
+        "l": "л",
+        "m": "м",
+        "n": "н",
+        "o": "о",
+        "p": "п",
+        "q": "к",
+        "r": "р",
+        "s": "с",
+        "t": "т",
+        "u": "у",
+        "v": "в",
+        "w": "в",
+        "x": "кс",
+        "y": "й",
+        "z": "з",
+    }
+
+    for part in parts:
+        if not re.fullmatch(r"[A-Za-z]+", part):
+            # Separators/digits are kept as speech-safe separators.
+            if part.isdigit():
+                out.append(part)
+            else:
+                out.append(" ")
+            continue
+
+        s = part.lower()
+        i = 0
+        converted: list[str] = []
+
+        while i < len(s):
+            matched = False
+            for src, dst in multi:
+                if s.startswith(src, i):
+                    converted.append(dst)
+                    i += len(src)
+                    matched = True
+                    break
+
+            if matched:
+                continue
+
+            ch = s[i]
+
+            # A little context helps common English C/G pronunciations.
+            nxt = s[i + 1] if i + 1 < len(s) else ""
+            if ch == "c" and nxt in ("e", "i", "y"):
+                converted.append("с")
+            elif ch == "g" and nxt in ("e", "i", "y"):
+                converted.append("дж")
+            else:
+                converted.append(single.get(ch, ""))
+
+            i += 1
+
+        out.append("".join(converted))
+
+    result = "".join(out)
+    result = re.sub(r"\s+", " ", result).strip()
+    return result or raw
+
+
+def normalize_text_for_russian_tts(text: str) -> str:
+    """
+    Replace Latin tokens with Cyrillic pronunciation only in the audio path.
+    """
+    if not re.search(r"[A-Za-z]", text):
+        return text
+
+    return _LATIN_TOKEN_RE.sub(
+        lambda m: _latin_token_to_cyrillic(m.group(0)),
+        text,
+    )
 
 
 def _profile_for_line(speaker: str, text: str) -> dict[str, str]:
@@ -560,6 +741,15 @@ class NeuralEngine:
         log("Neural model ready")
 
     def synthesize(self, speaker: str, text: str) -> Path:
+        original_text = text
+        text = normalize_text_for_russian_tts(text)
+
+        if text != original_text:
+            log(
+                f"LATIN NORMALIZED speaker={speaker} "
+                f"from={original_text!r} to={text!r}"
+            )
+
         profile = _profile_for_line(speaker, text)
         out = cache_path(speaker, text)
 
@@ -733,6 +923,7 @@ def self_test(play: bool = True) -> int:
         ("yuri", "Если ты не против... я бы хотела немного почитать вместе. Можно?"),
         ("monika", "Добро пожаловать в литературный клуб. Надеюсь, тебе здесь понравится."),
         ("mc", "Ну... ладно. Думаю, я понял. Тогда пойдём вместе!"),
+        ("mc", "Привет, Alex! Рад тебя видеть."),
     ]
 
     for speaker, text in samples:

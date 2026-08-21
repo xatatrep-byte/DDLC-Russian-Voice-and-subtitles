@@ -1,82 +1,12 @@
 {
-  "version": "1.0.2",
-  "kind": "github-repo-draft",
-  "files": {
-    ".github/ISSUE_TEMPLATE/bug_report.md": {
-      "sha256": "49b212df7c9e58947e77575155f94a6cdb03f9f8f98be4d9bd9a7e7040a58e11",
-      "bytes": 426
-    },
-    ".gitignore": {
-      "sha256": "be0a5e9620c62e22f23da201919e123e9c38011ab91221e77751e5022c63ee7c",
-      "bytes": 318
-    },
-    "BUNDLE_MANIFEST.json": {
-      "sha256": "1386f1715c965f877ee61e21492d29f1da7996330ed247171008001e92a37180",
-      "bytes": 1103
-    },
-    "CHANGELOG.md": {
-      "sha256": "c21edfcd8fac860edef996e395589d13eaa0584e81ac72d24f8a15640e3f8ad0",
-      "bytes": 869
-    },
-    "PUBLICATION_NOTICE.md": {
-      "sha256": "774909fc4b59528f099bcb3e18f44e7c795ae4a8e52a2a6c9925a68c07f0fc73",
-      "bytes": 2112
-    },
-    "README.md": {
-      "sha256": "94dc399acbf56f6cd9c5e1caa5a705f39750d884ebb744d30ae938d31686b5f9",
-      "bytes": 3896
-    },
-    "THIRD_PARTY_NOTICES.md": {
-      "sha256": "71da111686fae59b6a8a9b90afc2969379c4e76e3819e995eed1f9a33d87c655",
-      "bytes": 942
-    },
-    "diagnose.bat": {
-      "sha256": "f6b4637773c56ab71c29de3f185ebf2349908f0b28bb68ed76ad67f548fc088e",
-      "bytes": 166
-    },
-    "diagnose.ps1": {
-      "sha256": "7fe2ac71129482b7aa5a1fa53022d824a21224ebcef6be6395794e78f123a051",
-      "bytes": 2339
-    },
-    "install.bat": {
-      "sha256": "72b8681a20400a94b232c4b44e3a1a1085db0ba506fce5c75dc8cf58aaacc45b",
-      "bytes": 169
-    },
-    "install.ps1": {
-      "sha256": "6dac7cdb996938d7b801267d68207f2ba2b68febf4a2d836ab70c6ab0e57edd3",
-      "bytes": 23023
-    },
-    "payload/russian_subtitles/README.md": {
-      "sha256": "50a81ee2674b66937251807217e6c9dd05fe5da3bfa16e794e985f22b8710f5f",
-      "bytes": 419
-    },
-    "payload/voice/game/voice_mod/neural/SILERO_LICENSE_NOTICE.txt": {
-      "sha256": "3e79a618407390d1665877b2e62c3c1cea6d7be1a77c777a99e8f46c984269cb",
-      "bytes": 625
-    },
-    "payload/voice/game/voice_mod/neural/neural_tts.py": {
-      "sha256": "ecb092fafb4b84959ee4079d687f813babf4b576dd57b1e7e000fdff961e63e1",
-      "bytes": 23806
-    },
-    "payload/voice/game/voice_mod/neural/voices.json": {
-      "sha256": "5932277c362dac1bcb7a8d99b2a901c5732cffdb8878d03ff17c8a2ff157525f",
-      "bytes": 1205
-    },
-    "payload/voice/game/voice_mod/tts_helper.ps1": {
-      "sha256": "dda775bc2cbb2866789c5b05848c46a0431a8dae3fa00131432b1dd9863c5d1e",
-      "bytes": 1050
-    },
-    "payload/voice/game/zz_ddlc_russian_voice.rpy": {
-      "sha256": "3883e2ded71d32f3c225624902ee22c92919bdce8bff31838c5444642d2d4161",
-      "bytes": 9531
-    },
-    "restore-latest-backup.bat": {
-      "sha256": "59a6031eddae3b51d3b7b6b75fe50fdbebe2cb46a3ac0893e8112f42e7f61cc0",
-      "bytes": 190
-    },
-    "restore-latest-backup.ps1": {
-      "sha256": "3b69c002a9edff8a362225ba0bc78e9392f6e482a231d96d34d19c6f84d1b518",
-      "bytes": 2131
-    }
-  }
+  "bundle_version": "1.0.5",
+  "install_strategy": "full_sunteam_rar_overlay_then_voice",
+  "bundled_sunteam_archive": "payload/sunteam_full/DDLC_1.0_PC.rar",
+  "sunteam_archive_sha256": "15f4ffe7bb5e91a81e21e2c30448c3070e1511278187347fd2d1b719a5c01837",
+  "voice_hook_sha256": "28082688aebb536613cd6f8f64ae148e1545cdeedc745cc293f8963b2c9c8eb3",
+  "neural_engine_sha256": "13063d5553c69bf3bf35385eaa66bb53e387ac637ec16c1e1c17e673236897ab",
+  "voice_runtime": "Acting Lite / Natural Dashes",
+  "silero_model": "v5_5_ru",
+  "sapi_fallback": "disabled",
+  "latin_nickname_tts_normalization": true
 }

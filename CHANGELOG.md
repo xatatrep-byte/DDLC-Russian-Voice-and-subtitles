@@ -1,43 +1,17 @@
 # Changelog
 
-## v1.0.2 — Stable Installer Release
+## v1.0.5 — Full SUN-TEAM Overlay
 
-### Installer
+- Удалена логика частичной сборки русификатора из отдельных файлов.
+- В Full release включён исходный `DDLC_1.0_PC.rar` целиком.
+- Перед установкой проверяется SHA-256 полного RAR:
+  `15f4ffe7bb5e91a81e21e2c30448c3070e1511278187347fd2d1b719a5c01837`.
+- 7-Zip сначала тестирует архив, и только после этого начинается замена.
+- `game`, `renpy`, `lib`, `characters` очищаются и восстанавливаются целиком из SUN-TEAM архива.
+- После полного русского baseline устанавливается voice runtime.
+- Voice runtime собран из проверенной цепочки:
+  - v1.0.3 fresh-PC Python fix;
+  - v1.0.4b `runtime-ready.flag` / no SAPI fallback;
+  - v1.0.4c Latin nickname fix.
 
-- Automatic DDLC path discovery.
-- Additional Steam Library detection.
-- Case-insensitive path deduplication.
-- Original DDLC / DDLC Plus safety check.
-- Exact SUN-TEAM Studio v1.0 detection.
-- Existing Russian localization preservation.
-- Safe subtitle installation when no Russian localization is present.
-- Conflict protection for other Ren'Py mods.
-- Backups stored outside `game`.
-- Duplicate `zz_ddlc_russian_voice.rpy` cleanup.
-- Windows PowerShell 5.1 backup manifest fix.
-- First-run Python / PyTorch / Silero setup.
-- NVIDIA CUDA / CPU runtime selection.
-- Independent Silero self-test.
-- Diagnostics and latest-backup restore utility.
-
-### Voice runtime
-
-Stable baseline:
-
-`v0.5.2.3 Acting Lite / Natural Dashes`
-
-- Clause-level punctuation-aware prosody.
-- Deterministic micro-pauses.
-- Natural dash handling for all speakers.
-- Internal-word hyphen protection.
-- Fixed speaker mapping for all main characters.
-- Qwen runtime removed.
-
-### Repository
-
-- Public source tree kept free of full DDLC assets.
-- Binary SUN-TEAM translation payload kept out of Git history.
-- Added public Release documentation.
-- Added SUN-TEAM credits notice.
-- Added `.gitignore`.
-- Added GitHub bug-report template.
+- README/release notes now explain that first-time installation may take around 10–15 minutes because Python/PyTorch/Silero/7-Zip can be installed automatically.

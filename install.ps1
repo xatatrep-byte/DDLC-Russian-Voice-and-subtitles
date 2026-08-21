@@ -7,11 +7,16 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$BundleVersion = "1.0.2"
+$BundleVersion = "1.0.5"
+$ExpectedSunTeamArchiveHash = "15f4ffe7bb5e91a81e21e2c30448c3070e1511278187347fd2d1b719a5c01837"
 $ExpectedScriptsHash = "d13daa93ccaabc2cce15fc4293a20b3cd63fb0741e9ab3d5af9eb19009732dd4"
 $ExpectedFontsHash = "b37ae2835d6d074d216453f03b365bdbed78255f47e41a2d890f2631806c3bce"
 $ExpectedCommonHash = "0d08b92bebf77c874a7b7ffc5cbab169165bcb0a48cee6b956563b96bac6d418"
 $ExpectedCommonCHash = "cdd459bea8c20bbd421dfdab48a2dd8ce482d07a17dfda0efcaf80b86ea8dd96"
+$ExpectedSunTeamScriptVersion = "(6, 99, 13)"
+$ExpectedRuntimeBootstrapHash = "db7b1d5ccac10ca583fe3e383122b0a688d16b3ab116a02b8f31de401a3e2f32"
+$ExpectedRuntimePythonDllHash = "4bf70e90594a6d3fbc042747bb314f541e84c0d5f7ec1cf82beac0afd94b5348"
+$ExpectedRuntimeExeHash = "559d5ca234a68bac5a9b1130f9ec73512c1a20178daf0ce04154cbe83dcd32fe"
 
 function Write-Title([string]$Text) {
     Write-Host ""
@@ -31,6 +36,109 @@ function Write-Info([string]$Text) {
 
 function Write-Warn([string]$Text) {
     Write-Host ("[!] " + $Text) -ForegroundColor Yellow
+}
+
+# Windows PowerShell 5.1 can convert stderr from native programs into
+# NativeCommandError records. With ErrorActionPreference="Stop", an expected
+# probe failure (for example importing torch in a brand-new venv) can terminate
+# the whole installer before we can inspect LASTEXITCODE.
+#
+# Run native tools with ErrorActionPreference temporarily relaxed, preserve
+# their real process exit code, and restore the installer's strict mode after.
+$script:NativeExitCode = 0
+
+function Invoke-NativeSafe(
+    [string]$FilePath,
+    [string[]]$Arguments,
+    [switch]$Quiet
+) {
+    $savedPreference = $ErrorActionPreference
+
+    try {
+        $ErrorActionPreference = "Continue"
+
+        if ($Quiet) {
+            & $FilePath @Arguments 1>$null 2>$null
+        }
+        else {
+            & $FilePath @Arguments 2>&1 | ForEach-Object {
+                if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                    Write-Host $_.ToString()
+                }
+                else {
+                    Write-Host $_
+                }
+            }
+        }
+
+        if ($null -eq $LASTEXITCODE) {
+            $script:NativeExitCode = 0
+        }
+        else {
+            $script:NativeExitCode = [int]$LASTEXITCODE
+        }
+    }
+    finally {
+        $ErrorActionPreference = $savedPreference
+    }
+}
+
+
+function Find-7Zip {
+    foreach ($p in @(
+        "C:\Program Files\7-Zip\7z.exe",
+        "C:\Program Files (x86)\7-Zip\7z.exe"
+    )) {
+        if (Test-Path -LiteralPath $p) {
+            return $p
+        }
+    }
+
+    try {
+        $cmd = (Get-Command "7z.exe" -ErrorAction Stop).Source
+        if ($cmd) {
+            return $cmd
+        }
+    } catch {}
+
+    return $null
+}
+
+function Ensure-7Zip {
+    $seven = Find-7Zip
+    if ($seven) {
+        return $seven
+    }
+
+    Write-Warn "7-Zip was not found."
+    Write-Info "Trying to install 7-Zip through winget..."
+
+    try {
+        $winget = (Get-Command "winget.exe" -ErrorAction Stop).Source
+    }
+    catch {
+        throw "7-Zip is required to unpack the bundled DDLC_1.0_PC.rar. Install 7-Zip and rerun install.bat."
+    }
+
+    Invoke-NativeSafe -FilePath $winget -Arguments @(
+        "install",
+        "--exact",
+        "--id", "7zip.7zip",
+        "--silent",
+        "--accept-package-agreements",
+        "--accept-source-agreements"
+    )
+
+    if ($script:NativeExitCode -ne 0) {
+        throw "winget could not install 7-Zip. Exit code: $($script:NativeExitCode)"
+    }
+
+    $seven = Find-7Zip
+    if (!$seven) {
+        throw "7-Zip installation completed but 7z.exe could not be located."
+    }
+
+    return $seven
 }
 
 function Get-Sha256([string]$Path) {
@@ -173,6 +281,26 @@ function Test-ExactSunTeam([string]$Game) {
     return $true
 }
 
+function Test-ExactSunTeamRuntime([string]$Game) {
+    $versionPath = Join-Path $Game "game\script_version.txt"
+    $bootstrapPath = Join-Path $Game "renpy\bootstrap.py"
+    $pythonDllPath = Join-Path $Game "lib\windows-i686\python27.dll"
+
+    if (!(Test-Path -LiteralPath $versionPath)) { return $false }
+
+    try {
+        $version = (Get-Content -LiteralPath $versionPath -Raw).Trim()
+    }
+    catch {
+        return $false
+    }
+
+    if ($version -ne $ExpectedSunTeamScriptVersion) { return $false }
+    if ((Get-Sha256 $bootstrapPath) -ne $ExpectedRuntimeBootstrapHash) { return $false }
+    if ((Get-Sha256 $pythonDllPath) -ne $ExpectedRuntimePythonDllHash) { return $false }
+    return $true
+}
+
 function Test-CompatibleRussian([string]$Game) {
     $gameDir = Join-Path $Game "game"
     $common = Join-Path $gameDir "tl\None\common.rpym"
@@ -199,18 +327,36 @@ function Test-ForeignModFiles([string]$Game) {
 
 function Test-Python([string]$Exe) {
     if (!(Test-Path -LiteralPath $Exe)) { return $false }
+
+    $savedPreference = $ErrorActionPreference
+
     try {
+        $ErrorActionPreference = "Continue"
         $out = & $Exe -c "import sys,struct; print(sys.version_info.major,sys.version_info.minor,struct.calcsize('P')*8)" 2>$null
-        if ($LASTEXITCODE -ne 0) { return $false }
-        $parts = ($out -split "\s+")
-        if ($parts.Count -lt 3) { return $false }
+        $exitCode = $LASTEXITCODE
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $ErrorActionPreference = $savedPreference
+    }
+
+    if ($exitCode -ne 0) { return $false }
+
+    $parts = ($out -split "\s+")
+    if ($parts.Count -lt 3) { return $false }
+
+    try {
         $major = [int]$parts[0]
         $minor = [int]$parts[1]
         $bits = [int]$parts[2]
-        return ($major -eq 3 -and $minor -ge 10 -and $minor -le 13 -and $bits -eq 64)
-    } catch {
+    }
+    catch {
         return $false
     }
+
+    return ($major -eq 3 -and $minor -ge 10 -and $minor -le 13 -and $bits -eq 64)
 }
 
 function Find-Python {
@@ -233,19 +379,29 @@ function Find-Python {
     try {
         $py = (Get-Command "py.exe" -ErrorAction Stop).Source
         foreach ($ver in @("-3.11", "-3.12", "-3.13")) {
+            $savedPreference = $ErrorActionPreference
             try {
+                $ErrorActionPreference = "Continue"
                 $resolved = & $py $ver -c "import sys; print(sys.executable)" 2>$null
-                if ($LASTEXITCODE -eq 0 -and (Test-Python $resolved.Trim())) {
-                    return $resolved.Trim()
-                }
-            } catch {}
+                $pyExitCode = $LASTEXITCODE
+            }
+            catch {
+                $pyExitCode = 1
+            }
+            finally {
+                $ErrorActionPreference = $savedPreference
+            }
+
+            if ($pyExitCode -eq 0 -and $resolved -and (Test-Python $resolved.Trim())) {
+                return $resolved.Trim()
+            }
         }
     } catch {}
 
     return $null
 }
 
-Write-Title "DDLC Russian Voice v1.0.2 - Full Safe Installer"
+Write-Title "DDLC Russian Voice v1.0.5 - Full SUN-TEAM Overlay Installer"
 
 # --------------------------------------------------------------------
 # Locate / validate DDLC.
@@ -277,7 +433,93 @@ if (Test-Path -LiteralPath (Join-Path $GamePath "Doki Doki Literature Club Plus.
 }
 
 # --------------------------------------------------------------------
+# Full SUN-TEAM overlay.
+#
+# v1.0.5 deliberately does NOT reconstruct the Russian translation from a
+# selected subset of files. It uses the complete original DDLC_1.0_PC.rar
+# supplied with this release, verifies it, removes the four game/runtime
+# directories, then extracts the archive directly over the installed DDLC.
+# The voice mod is installed only AFTER this exact SUN-TEAM baseline exists.
+# --------------------------------------------------------------------
+Write-Step "Installing complete SUN-TEAM DDLC_1.0_PC.rar baseline"
+
+$sunTeamArchive = Join-Path $PSScriptRoot "payload\sunteam_full\DDLC_1.0_PC.rar"
+
+if (!(Test-Path -LiteralPath $sunTeamArchive)) {
+    throw "Bundled DDLC_1.0_PC.rar is missing. Download the Full v1.0.5 release again."
+}
+
+Write-Info "Verifying bundled DDLC_1.0_PC.rar..."
+$archiveHash = Get-Sha256 $sunTeamArchive
+if ($archiveHash -ne $ExpectedSunTeamArchiveHash) {
+    throw ("DDLC_1.0_PC.rar SHA-256 mismatch. Expected " + $ExpectedSunTeamArchiveHash + ", got " + $archiveHash)
+}
+
+$runningDDLC = Get-Process -Name "DDLC" -ErrorAction SilentlyContinue
+if ($runningDDLC) {
+    throw "DDLC is currently running. Close the game completely and rerun install.bat."
+}
+
+$sevenZip = Ensure-7Zip
+Write-Info ("7-Zip: " + $sevenZip)
+
+# Test the RAR BEFORE deleting/replacing any game files.
+Write-Info "Testing SUN-TEAM archive integrity..."
+Invoke-NativeSafe -FilePath $sevenZip -Arguments @(
+    "t",
+    $sunTeamArchive
+)
+if ($script:NativeExitCode -ne 0) {
+    throw "DDLC_1.0_PC.rar failed the 7-Zip integrity test."
+}
+
+Write-Warn "Replacing DDLC game/runtime files with the complete SUN-TEAM package."
+Write-Info "Removing old game, renpy, lib and characters directories first..."
+
+foreach ($dirName in @("game", "renpy", "lib", "characters")) {
+    $targetDir = Join-Path $GamePath $dirName
+    if (Test-Path -LiteralPath $targetDir) {
+        Remove-Item -LiteralPath $targetDir -Recurse -Force
+    }
+}
+
+Write-Info "Extracting the complete SUN-TEAM package with overwrite enabled..."
+Invoke-NativeSafe -FilePath $sevenZip -Arguments @(
+    "x",
+    $sunTeamArchive,
+    ("-o" + $GamePath),
+    "-y",
+    "-aoa"
+)
+if ($script:NativeExitCode -ne 0) {
+    throw "SUN-TEAM archive extraction failed. Exit code: $($script:NativeExitCode)"
+}
+
+# Recompute paths because the game directory has just been recreated.
+$game = Join-Path $GamePath "game"
+$voiceDir = Join-Path $game "voice_mod"
+$neuralDir = Join-Path $voiceDir "neural"
+
+if (!(Test-DDLCPath $GamePath)) {
+    throw "SUN-TEAM extraction completed, but the DDLC installation is incomplete."
+}
+
+if (!(Test-ExactSunTeam $GamePath)) {
+    throw "Complete SUN-TEAM overlay verification failed: translated files do not match DDLC_1.0_PC.rar."
+}
+
+if (!(Test-ExactSunTeamRuntime $GamePath)) {
+    throw "Complete SUN-TEAM overlay verification failed: matching Ren'Py 6.99.13 runtime was not installed."
+}
+
+Write-Host "    Complete SUN-TEAM package installed and verified." -ForegroundColor Green
+Write-Host "    Russian subtitles baseline: READY" -ForegroundColor Green
+Write-Host "    Ren'Py 6.99.13 baseline: READY" -ForegroundColor Green
+
+# --------------------------------------------------------------------
 # Backup manager. Backups are deliberately OUTSIDE game/.
+# In v1.0.5 this backup covers our voice overlay. The complete SUN-TEAM
+# baseline itself can be reverted by Steam's Verify integrity feature.
 # --------------------------------------------------------------------
 $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $backupRoot = Join-Path $GamePath ("_DDLC_RussianVoice_Backups\" + $stamp)
@@ -300,7 +542,40 @@ function Register-Target([string]$AbsolutePath) {
     [void]$backupRecords.Add([pscustomobject]@{
         relative = $relative
         existed = [bool]$exists
+        kind = "file"
     })
+}
+
+function Register-TreeTarget([string]$AbsolutePath) {
+    $relative = $AbsolutePath.Substring($GamePath.Length).TrimStart("\")
+    $exists = Test-Path -LiteralPath $AbsolutePath
+
+    if ($exists) {
+        $backupPath = Join-Path $backupOriginal $relative
+        $parent = Split-Path -Parent $backupPath
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        Copy-Item -LiteralPath $AbsolutePath -Destination $backupPath -Recurse -Force
+    }
+
+    [void]$backupRecords.Add([pscustomobject]@{
+        relative = $relative
+        existed = [bool]$exists
+        kind = "directory"
+    })
+}
+
+function Install-TreeFromPayload([string]$SourceDir, [string]$TargetDir) {
+    if (!(Test-Path -LiteralPath $SourceDir)) {
+        throw "Runtime payload directory is missing: $SourceDir"
+    }
+
+    Register-TreeTarget $TargetDir
+
+    if (Test-Path -LiteralPath $TargetDir) {
+        Remove-Item -LiteralPath $TargetDir -Recurse -Force
+    }
+
+    Copy-Item -LiteralPath $SourceDir -Destination $TargetDir -Recurse -Force
 }
 
 # --------------------------------------------------------------------
@@ -327,90 +602,33 @@ foreach ($c in $compiledHooks) {
 }
 
 # --------------------------------------------------------------------
-# Russian subtitle detection / installation.
+# Verify the complete SUN-TEAM baseline installed above.
+# No partial/smart subtitle installation exists in v1.0.5.
 # --------------------------------------------------------------------
-Write-Step "Checking Russian subtitles"
-
-$subtitlePayload = Join-Path $PSScriptRoot "payload\russian_subtitles\game"
-$payloadScripts = Join-Path $subtitlePayload "scripts.rpa"
-$payloadFonts = Join-Path $subtitlePayload "fonts.rpa"
-$payloadCommon = Join-Path $subtitlePayload "tl\None\common.rpym"
-$payloadCommonC = Join-Path $subtitlePayload "tl\None\common.rpymc"
-
-$payloadAvailable = (
-    (Test-Path -LiteralPath $payloadScripts) -and
-    (Test-Path -LiteralPath $payloadFonts) -and
-    (Test-Path -LiteralPath $payloadCommon) -and
-    (Test-Path -LiteralPath $payloadCommonC)
-)
+Write-Step "Verifying Russian subtitles and matching Ren'Py runtime"
 
 $exactSunTeam = Test-ExactSunTeam $GamePath
-$compatibleRussian = Test-CompatibleRussian $GamePath
+$compatibleRussian = $exactSunTeam
+$exactSunTeamRuntime = Test-ExactSunTeamRuntime $GamePath
+$subtitlePayloadUsed = $true
+$runtimePayloadUsed = $true
 
-if ($exactSunTeam) {
-    Write-Host "    SUN-TEAM Studio Russian translation v1.0 detected." -ForegroundColor Cyan
-    Write-Host "    Subtitle files will NOT be overwritten." -ForegroundColor Green
+if (!$exactSunTeam) {
+    throw "SUN-TEAM Russian subtitle verification failed after full archive extraction."
 }
-elseif ($compatibleRussian) {
-    Write-Host "    An existing Russian localization was detected." -ForegroundColor Cyan
-    Write-Host "    It is not the exact bundled SUN-TEAM hash, so it will be preserved." -ForegroundColor Green
-    Write-Host "    Voice will be installed on top of the existing Russian text." -ForegroundColor Green
+
+if (!$exactSunTeamRuntime) {
+    throw "SUN-TEAM Ren'Py 6.99.13 runtime verification failed after full archive extraction."
 }
-else {
-    if (!$payloadAvailable) {
-        throw @"
-No Russian localization was detected, and this package does not contain
-a private Russian subtitle payload.
 
-Install the SUN-TEAM Studio Russian translation first, then rerun this installer.
-The public GitHub draft intentionally omits translated DDLC assets.
-"@
-    }
+Write-Host "    SUN-TEAM Studio Russian translation v1.0: VERIFIED" -ForegroundColor Green
+Write-Host "    Matching Ren'Py 6.99.13 runtime: VERIFIED" -ForegroundColor Green
 
-    $foreign = Test-ForeignModFiles $GamePath
-    if ($foreign.Count -gt 0 -and !$ForceSubtitleReplace) {
-        Write-Warn "Other Ren'Py mod files were detected:"
-        $foreign | Select-Object -First 12 | ForEach-Object { Write-Host ("    " + $_.FullName) }
-        throw @"
-Safe mode stopped before replacing scripts.rpa.
-
-The game appears to contain another mod. Replacing scripts.rpa could break it.
-Use a clean original DDLC install, install this bundle there, or rerun with
--ForceSubtitleReplace if you knowingly want to replace the other mod.
-"@
-    }
-
-    Write-Host "    Russian subtitles not detected. Installing SUN-TEAM Studio v1.0..." -ForegroundColor Cyan
-
-    $targets = @(
-        @((Join-Path $game "scripts.rpa"), $payloadScripts, $ExpectedScriptsHash),
-        @((Join-Path $game "fonts.rpa"), $payloadFonts, $ExpectedFontsHash),
-        @((Join-Path $game "tl\None\common.rpym"), $payloadCommon, $ExpectedCommonHash),
-        @((Join-Path $game "tl\None\common.rpymc"), $payloadCommonC, $ExpectedCommonCHash)
-    )
-
-    foreach ($t in $targets) {
-        $target = $t[0]
-        $source = $t[1]
-        $expected = $t[2]
-
-        Register-Target $target
-        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
-        Copy-Item -LiteralPath $source -Destination $target -Force
-
-        $actual = Get-Sha256 $target
-        if ($actual -ne $expected) {
-            throw "Russian subtitle verification failed for: $target"
-        }
-    }
-
-    Write-Host "    SUN-TEAM Studio Russian translation installed and verified." -ForegroundColor Green
-}
 
 # --------------------------------------------------------------------
 # Install stable voice runtime.
 # --------------------------------------------------------------------
-Write-Step "Installing DDLC Russian Voice stable runtime"
+Write-Step "Installing DDLC Russian Voice v1.0.5 runtime"
 
 $voicePayload = Join-Path $PSScriptRoot "payload\voice\game"
 $sourceHook = Join-Path $voicePayload "zz_ddlc_russian_voice.rpy"
@@ -482,9 +700,17 @@ if (!$SkipDependencySetup) {
                 throw "Python is missing and winget is unavailable. Install 64-bit Python 3.11 and rerun."
             }
 
-            & $winget install --exact --id Python.Python.3.11 --scope user --silent --accept-package-agreements --accept-source-agreements
-            if ($LASTEXITCODE -ne 0) {
-                throw "winget could not install Python 3.11. Exit code: $LASTEXITCODE"
+            Invoke-NativeSafe -FilePath $winget -Arguments @(
+                "install",
+                "--exact",
+                "--id", "Python.Python.3.11",
+                "--scope", "user",
+                "--silent",
+                "--accept-package-agreements",
+                "--accept-source-agreements"
+            )
+            if ($script:NativeExitCode -ne 0) {
+                throw "winget could not install Python 3.11. Exit code: $($script:NativeExitCode)"
             }
 
             $python = Find-Python
@@ -495,18 +721,29 @@ if (!$SkipDependencySetup) {
 
         Write-Info ("Python: " + $python)
         Write-Info "Creating isolated virtual environment..."
-        & $python -m venv $venv
-        if ($LASTEXITCODE -ne 0) { throw "Failed to create virtual environment." }
+        Invoke-NativeSafe -FilePath $python -Arguments @("-m", "venv", $venv)
+        if ($script:NativeExitCode -ne 0) {
+            throw "Failed to create virtual environment. Exit code: $($script:NativeExitCode)"
+        }
     }
 
     # Check whether the existing venv is already usable.
-    & $venvPython -c "import torch,numpy; print('runtime-ok')" 2>$null | Out-Null
-    $runtimeOk = ($LASTEXITCODE -eq 0)
+    # Missing torch/numpy is EXPECTED on a brand-new PC and must not abort
+    # Windows PowerShell 5.1 with NativeCommandError.
+    Invoke-NativeSafe -FilePath $venvPython -Arguments @(
+        "-c",
+        "import torch,numpy; print('runtime-ok')"
+    ) -Quiet
+    $runtimeOk = ($script:NativeExitCode -eq 0)
 
     if (!$runtimeOk) {
         Write-Info "Installing Python dependencies..."
-        & $venvPython -m pip install --upgrade pip setuptools wheel
-        if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed." }
+        Invoke-NativeSafe -FilePath $venvPython -Arguments @(
+            "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"
+        )
+        if ($script:NativeExitCode -ne 0) {
+            throw "pip upgrade failed. Exit code: $($script:NativeExitCode)"
+        }
 
         $hasNvidia = $false
         try {
@@ -516,15 +753,29 @@ if (!$SkipDependencySetup) {
 
         if ($hasNvidia) {
             Write-Info "NVIDIA GPU detected: installing PyTorch 2.7.0 CUDA 12.8."
-            & $venvPython -m pip install "torch==2.7.0" --index-url "https://download.pytorch.org/whl/cu128"
+            Invoke-NativeSafe -FilePath $venvPython -Arguments @(
+                "-m", "pip", "install",
+                "torch==2.7.0",
+                "--index-url", "https://download.pytorch.org/whl/cu128"
+            )
         } else {
             Write-Info "NVIDIA GPU not detected: installing PyTorch 2.7.0 CPU build."
-            & $venvPython -m pip install "torch==2.7.0" --index-url "https://download.pytorch.org/whl/cpu"
+            Invoke-NativeSafe -FilePath $venvPython -Arguments @(
+                "-m", "pip", "install",
+                "torch==2.7.0",
+                "--index-url", "https://download.pytorch.org/whl/cpu"
+            )
         }
-        if ($LASTEXITCODE -ne 0) { throw "PyTorch installation failed." }
+        if ($script:NativeExitCode -ne 0) {
+            throw "PyTorch installation failed. Exit code: $($script:NativeExitCode)"
+        }
 
-        & $venvPython -m pip install "numpy>=1.26,<3"
-        if ($LASTEXITCODE -ne 0) { throw "NumPy installation failed." }
+        Invoke-NativeSafe -FilePath $venvPython -Arguments @(
+            "-m", "pip", "install", "numpy>=1.26,<3"
+        )
+        if ($script:NativeExitCode -ne 0) {
+            throw "NumPy installation failed. Exit code: $($script:NativeExitCode)"
+        }
     } else {
         Write-Info "Existing Python/Silero environment is reusable; heavy packages were not reinstalled."
     }
@@ -552,17 +803,41 @@ if (!(Test-Path -LiteralPath $modelPath)) {
     throw "Silero model is missing. Rerun without -SkipDependencySetup."
 }
 
-$runtimeInfo = & $venvPython -c "import torch,numpy; print('torch='+torch.__version__); print('cuda='+str(torch.cuda.is_available())); print('gpu='+(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')); print('numpy='+numpy.__version__)"
-if ($LASTEXITCODE -ne 0) {
-    throw "Python runtime verification failed."
+Write-Info "Runtime details:"
+Invoke-NativeSafe -FilePath $venvPython -Arguments @(
+    "-c",
+    "import torch,numpy; print('torch='+torch.__version__); print('cuda='+str(torch.cuda.is_available())); print('gpu='+(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')); print('numpy='+numpy.__version__)"
+)
+if ($script:NativeExitCode -ne 0) {
+    throw "Python runtime verification failed. Exit code: $($script:NativeExitCode)"
 }
-$runtimeInfo | ForEach-Object { Write-Info $_ }
 
 Write-Info "Running Silero generation self-test..."
-& $venvPython $targetEngine --self-test --no-play
-if ($LASTEXITCODE -ne 0) {
+Invoke-NativeSafe -FilePath $venvPython -Arguments @(
+    $targetEngine,
+    "--self-test",
+    "--no-play"
+)
+if ($script:NativeExitCode -ne 0) {
     throw "Silero self-test failed. Run diagnose.bat and send the output."
 }
+
+$runtimeReadyFlag = Join-Path $neuralDir "runtime-ready.flag"
+$failedFlag = Join-Path $neuralDir "failed.flag"
+$legacyReadyFlag = Join-Path $neuralDir "ready.flag"
+
+if (!(Test-Path -LiteralPath $runtimeReadyFlag)) {
+    throw "Silero self-test completed but runtime-ready.flag was not created."
+}
+if (Test-Path -LiteralPath $failedFlag) {
+    throw "Silero failed.flag exists after self-test. Run diagnose.bat."
+}
+if (Test-Path -LiteralPath $legacyReadyFlag) {
+    Remove-Item -LiteralPath $legacyReadyFlag -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host "    Silero backend readiness verified (runtime-ready.flag)." -ForegroundColor Green
+Write-Info "Automatic Windows SAPI fallback is disabled."
 
 # --------------------------------------------------------------------
 # Marker + backup manifest.
@@ -573,10 +848,14 @@ $installState = [pscustomobject]@{
     bundle_version = $BundleVersion
     installed_at = (Get-Date -Format o)
     game_path = $GamePath
-    exact_sunteam_detected_before_install = [bool]$exactSunTeam
-    compatible_russian_detected_before_install = [bool]$compatibleRussian
-    subtitle_payload_used = [bool](!$exactSunTeam -and !$compatibleRussian)
-    voice_runtime = "v0.5.2.3 Natural Dashes / Acting Lite"
+    full_sunteam_archive_overlay = $true
+    sunteam_archive_sha256 = "15f4ffe7bb5e91a81e21e2c30448c3070e1511278187347fd2d1b719a5c01837"
+    exact_sunteam_verified = [bool](Test-ExactSunTeam $GamePath)
+    sunteam_runtime_verified = [bool](Test-ExactSunTeamRuntime $GamePath)
+    voice_runtime = "v1.0.5 Acting Lite / Natural Dashes"
+    silero_backend = "silero-v5_5"
+    sapi_fallback = "disabled"
+    latin_nickname_tts_normalization = $true
 }
 
 $installState | ConvertTo-Json -Depth 5 |
@@ -597,8 +876,9 @@ $manifestObject | ConvertTo-Json -Depth 8 |
 
 Write-Title "INSTALLATION COMPLETE"
 Write-Host "  Russian subtitles : READY" -ForegroundColor Green
-Write-Host "  Voice runtime      : v0.5.2.3 Acting Lite" -ForegroundColor Green
+Write-Host "  Voice runtime      : v1.0.5 Acting Lite" -ForegroundColor Green
 Write-Host "  Silero self-test   : PASS" -ForegroundColor Green
+Write-Host "  Silero backend     : silero-v5_5 (SAPI fallback disabled)" -ForegroundColor Green
 Write-Host "  Ren'Py hook count  : 1" -ForegroundColor Green
 Write-Host ""
 Write-Host ("  Backup: " + $backupRoot) -ForegroundColor DarkGray

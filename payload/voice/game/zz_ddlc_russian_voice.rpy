@@ -1,4 +1,4 @@
-# DDLC Original Russian Voice Mod v0.5.0 Simple Silero
+# DDLC Original Russian Voice Mod v1.0.4b Silero Backend Fix
 # Target: original DDLC 2017 / Ren'Py 6.99-era.
 # ASCII-only source for old Ren'Py/Python 2 compatibility.
 
@@ -100,8 +100,11 @@ init 999 python:
     def _rv_neural_server():
         return os.path.join(_rv_neural_root(), "neural_tts.py")
 
+    def _rv_neural_model():
+        return os.path.join(_rv_neural_root(), "models", "v5_5_ru.pt")
+
     def _rv_neural_ready():
-        return os.path.join(_rv_neural_root(), "ready.flag")
+        return os.path.join(_rv_neural_root(), "runtime-ready.flag")
 
     def _rv_neural_failed():
         return os.path.join(_rv_neural_root(), "failed.flag")
@@ -122,9 +125,22 @@ init 999 python:
         return (
             os.path.isfile(_rv_neural_python())
             and os.path.isfile(_rv_neural_server())
+            and os.path.isfile(_rv_neural_model())
             and os.path.isfile(_rv_neural_ready())
             and not os.path.isfile(_rv_neural_failed())
         )
+
+    def _rv_log_neural_status():
+        try:
+            _rv_log(
+                "Silero status python=" + str(os.path.isfile(_rv_neural_python())) +
+                " server=" + str(os.path.isfile(_rv_neural_server())) +
+                " model=" + str(os.path.isfile(_rv_neural_model())) +
+                " runtime_ready=" + str(os.path.isfile(_rv_neural_ready())) +
+                " failed=" + str(os.path.isfile(_rv_neural_failed()))
+            )
+        except:
+            pass
 
     def _rv_start():
         global _rv_process, _rv_null, _rv_backend
@@ -157,24 +173,15 @@ init 999 python:
                     _rv_neural_server(),
                     "--stdio"
                 ]
-                _rv_backend = "silero-v5_5-cuda"
+                _rv_backend = "silero-v5_5"
             else:
-                helper = _rv_sapi_helper()
-                if not os.path.isfile(helper):
-                    _rv_log("ERROR no voice backend is available")
-                    _rv_backend = "none"
-                    return False
-                args = [
-                    _rv_ps(),
-                    "-NoLogo",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    helper
-                ]
-                _rv_backend = "windows-sapi"
+                _rv_log_neural_status()
+                _rv_log(
+                    "ERROR Silero backend is unavailable. "
+                    "Automatic Windows SAPI fallback is DISABLED."
+                )
+                _rv_backend = "none"
+                return False
 
             _rv_process = subprocess.Popen(
                 args,
@@ -290,7 +297,7 @@ init 999 python:
             u"\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u043d\u0435\u0439\u0440\u043e\u0441\u0435\u0442\u0435\u0432\u043e\u0439 \u0440\u0443\u0441\u0441\u043a\u043e\u0439 \u043e\u0437\u0432\u0443\u0447\u043a\u0438. \u0415\u0441\u043b\u0438 \u0442\u044b \u0441\u043b\u044b\u0448\u0438\u0448\u044c \u044d\u0442\u0443 \u0444\u0440\u0430\u0437\u0443, \u043d\u043e\u0432\u044b\u0439 \u0434\u0432\u0438\u0436\u043e\u043a \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442."
         )
 
-    _rv_log("=== DDLC Russian Voice v0.5.0 Simple Silero init ===")
+    _rv_log("=== DDLC Russian Voice v1.0.4b Silero Backend Fix init ===")
     _rv_install()
 
     try:

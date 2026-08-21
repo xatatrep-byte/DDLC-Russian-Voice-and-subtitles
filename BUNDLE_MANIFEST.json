@@ -1,33 +1,12 @@
 {
-  "bundle_version": "1.0.1",
-  "voice_runtime": "v0.5.2.3 Natural Dashes / Acting Lite",
-  "translation": {
-    "name": "SUN-TEAM Studio Russian translation",
-    "version": "1.0",
-    "source_archive_uploaded_by_user": "DDLC_1.0_PC.rar",
-    "credits_found_in_translated_credits": "Перевод на русский выполнен SUN-TEAM Studio",
-    "files": {
-      "scripts.rpa": {
-        "sha256": "d13daa93ccaabc2cce15fc4293a20b3cd63fb0741e9ab3d5af9eb19009732dd4",
-        "bytes": 2827941
-      },
-      "fonts.rpa": {
-        "sha256": "b37ae2835d6d074d216453f03b365bdbed78255f47e41a2d890f2631806c3bce",
-        "bytes": 1864353
-      },
-      "tl/None/common.rpym": {
-        "sha256": "0d08b92bebf77c874a7b7ffc5cbab169165bcb0a48cee6b956563b96bac6d418",
-        "bytes": 29861
-      },
-      "tl/None/common.rpymc": {
-        "sha256": "cdd459bea8c20bbd421dfdab48a2dd8ce482d07a17dfda0efcaf80b86ea8dd96",
-        "bytes": 27070
-      }
-    }
-  },
-  "silero": {
-    "model": "v5_5_ru",
-    "download_url": "https://models.silero.ai/models/tts/ru/v5_5_ru.pt",
-    "not_bundled": true
-  }
+  "bundle_version": "1.0.5",
+  "install_strategy": "full_sunteam_rar_overlay_then_voice",
+  "bundled_sunteam_archive": "payload/sunteam_full/DDLC_1.0_PC.rar",
+  "sunteam_archive_sha256": "15f4ffe7bb5e91a81e21e2c30448c3070e1511278187347fd2d1b719a5c01837",
+  "voice_hook_sha256": "28082688aebb536613cd6f8f64ae148e1545cdeedc745cc293f8963b2c9c8eb3",
+  "neural_engine_sha256": "13063d5553c69bf3bf35385eaa66bb53e387ac637ec16c1e1c17e673236897ab",
+  "voice_runtime": "Acting Lite / Natural Dashes",
+  "silero_model": "v5_5_ru",
+  "sapi_fallback": "disabled",
+  "latin_nickname_tts_normalization": true
 }

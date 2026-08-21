@@ -2,30 +2,38 @@
 
 ## Doki Doki Literature Club
 
-Doki Doki Literature Club © Team Salvato.
+Doki Doki Literature Club is © Team Salvato.
+This project is unofficial and is not affiliated with or endorsed by Team Salvato.
 
-Этот проект является фанатским и не аффилирован с Team Salvato.
+Official IP Guidelines:
+https://teamsalvato.com/ip-guidelines
 
 ## Russian subtitles
 
-Russian translation:
+Russian translation detected in the user-supplied archive:
+**SUN-TEAM Studio — Russian translation v1.0**
 
-**SUN-TEAM Studio v1.0**
+Historic Steam guide:
+https://steamcommunity.com/sharedfiles/filedetails/?id=1301396549
 
-См. `SUNTEAM_TRANSLATION_NOTICE.md`.
+The private bundle extracts only:
+- `game/scripts.rpa`
+- `game/fonts.rpa`
+- `game/tl/None/common.rpym`
+- `game/tl/None/common.rpymc`
+
+It intentionally does not redistribute the complete DDLC game archive.
 
 ## Silero
 
-Для локального синтеза речи используется Silero TTS `v5_5_ru`.
-
-Модель не хранится в Git-репозитории и при необходимости скачивается установщиком.
+The installer downloads `v5_5_ru` from the official Silero model host.
+Silero states that its models are published under a non-commercial CC-NC-BY
+license except for specifically identified base CIS models.
 
 Project:
 https://github.com/snakers4/silero-models
 
-## PyTorch
 
-PyTorch используется как runtime для локального neural TTS.
+## Ren'Py runtime compatibility
 
-Для NVIDIA installer может использовать CUDA build.
-Для систем без NVIDIA используется CPU build.
+v1.0.5 bundles the matching Ren'Py runtime files from the same SUN-TEAM package solely so its compiled translated scripts run against the runtime they were built for.

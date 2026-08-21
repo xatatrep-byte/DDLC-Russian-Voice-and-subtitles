@@ -27,17 +27,15 @@ if (!(Test-Path -LiteralPath $backupBase)) {
 }
 
 $latest = Get-ChildItem -LiteralPath $backupBase -Directory |
-    Sort-Object Name -Descending |
+    Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "backup_manifest.json") } |
+    Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 
 if ($null -eq $latest) {
-    throw "No backups found."
+    throw "No restorable backup with backup_manifest.json was found."
 }
 
 $manifestPath = Join-Path $latest.FullName "backup_manifest.json"
-if (!(Test-Path -LiteralPath $manifestPath)) {
-    throw "Backup manifest not found: $manifestPath"
-}
 
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 Write-Host ("Restoring backup: " + $latest.FullName)
@@ -45,18 +43,34 @@ Write-Host ("Restoring backup: " + $latest.FullName)
 foreach ($record in $manifest.records) {
     $target = Join-Path $GamePath $record.relative
     $source = Join-Path (Join-Path $latest.FullName "original") $record.relative
+    $kind = "file"
+    if ($record.PSObject.Properties.Name -contains "kind") {
+        $kind = [string]$record.kind
+    }
 
     if ($record.existed) {
         if (!(Test-Path -LiteralPath $source)) {
-            throw "Backup file is missing: $source"
+            throw "Backup content is missing: $source"
         }
-        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
-        Copy-Item -LiteralPath $source -Destination $target -Force
-        Write-Host ("RESTORED " + $record.relative)
-    } else {
+
+        if ($kind -eq "directory") {
+            if (Test-Path -LiteralPath $target) {
+                Remove-Item -LiteralPath $target -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+            Copy-Item -LiteralPath $source -Destination $target -Recurse -Force
+            Write-Host ("RESTORED DIRECTORY " + $record.relative)
+        }
+        else {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+            Copy-Item -LiteralPath $source -Destination $target -Force
+            Write-Host ("RESTORED " + $record.relative)
+        }
+    }
+    else {
         if (Test-Path -LiteralPath $target) {
             Remove-Item -LiteralPath $target -Recurse -Force
-            Write-Host ("REMOVED NEW FILE " + $record.relative)
+            Write-Host ("REMOVED NEW CONTENT " + $record.relative)
         }
     }
 }
